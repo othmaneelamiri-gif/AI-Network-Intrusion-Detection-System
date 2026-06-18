@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>IDS Platform — Intrusion Detection System</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:       #050A18;
+    --surface:  #0D1526;
+    --surface2: #142035;
+    --border:   #1E3A5F;
+    --accent:   #3B82F6;
+    --accent2:  #6366F1;
+    --green:    #22C55E;
+    --yellow:   #EAB308;
+    --orange:   #F97316;
+    --red:      #EF4444;
+    --text:     #E2E8F0;
+    --muted:    #64748B;
+    --mono:     'JetBrains Mono', monospace;
+    --sans:     'Inter', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    letter-spacing: 0.05em;
+  }
+  .logo svg { color: var(--accent); }
+  .status-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--green);
+  }
+  .pulse {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34,197,94,.4); }
+    50%      { opacity: .8; box-shadow: 0 0 0 6px rgba(34,197,94,0); }
+  }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+  .btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-family: var(--sans);
+    transition: all .15s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #2563EB; color: #fff; }
+
+  /* ── Layout ── */
+  main { padding: 1.5rem 2rem; max-width: 1600px; margin: 0 auto; }
+
+  /* ── Stat Cards ── */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem 1.4rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+  }
+  .stat-card.red::before   { background: var(--red); }
+  .stat-card.orange::before{ background: var(--orange); }
+  .stat-card.green::before { background: var(--green); }
+  .stat-card.purple::before{ background: var(--accent2); }
+
+  .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: .4rem; }
+  .stat-value { font-size: 2rem; font-weight: 700; font-family: var(--mono); line-height: 1; }
+  .stat-sub   { font-size: 0.75rem; color: var(--muted); margin-top: .3rem; }
+
+  /* ── Grid ── */
+  .content-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .content-grid.three { grid-template-columns: 2fr 1fr 1fr; }
+  @media (max-width: 1024px) {
+    .content-grid, .content-grid.three { grid-template-columns: 1fr; }
+  }
+
+  /* ── Panels ── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: .9rem 1.2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-title {
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .panel-body { padding: 1rem 1.2rem; }
+
+  /* ── Chart containers ── */
+  .chart-wrap { position: relative; height: 220px; }
+
+  /* ── Alert table ── */
+  .alert-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  .alert-table th {
+    text-align: left;
+    padding: .5rem .75rem;
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .alert-table td {
+    padding: .55rem .75rem;
+    border-bottom: 1px solid rgba(30,58,95,.4);
+    font-family: var(--mono);
+    font-size: .78rem;
+    vertical-align: middle;
+  }
+  .alert-table tr:last-child td { border-bottom: none; }
+  .alert-table tr:hover td { background: rgba(59,130,246,.04); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: .68rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+  }
+  .badge.CRITICAL { background: rgba(239,68,68,.15);  color: var(--red); }
+  .badge.HIGH     { background: rgba(249,115,22,.15); color: var(--orange); }
+  .badge.MEDIUM   { background: rgba(234,179,8,.15);  color: var(--yellow); }
+  .badge.LOW      { background: rgba(34,197,94,.15);  color: var(--green); }
+
+  .type-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: .68rem;
+    background: rgba(59,130,246,.12);
+    color: var(--accent);
+    border: 1px solid rgba(59,130,246,.2);
+  }
+
+  /* ── Live packet feed ── */
+  .packet-feed {
+    font-family: var(--mono);
+    font-size: .72rem;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .packet-feed::-webkit-scrollbar { width: 4px; }
+  .packet-feed::-webkit-scrollbar-track { background: transparent; }
+  .packet-feed::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .pkt-row {
+    display: grid;
+    grid-template-columns: 6rem 8rem 8rem 3rem 3rem;
+    gap: .5rem;
+    padding: .3rem .5rem;
+    border-bottom: 1px solid rgba(30,58,95,.3);
+    color: var(--muted);
+    transition: background .1s;
+  }
+  .pkt-row:hover { background: rgba(59,130,246,.05); color: var(--text); }
+  .pkt-row .proto-tcp  { color: var(--accent); }
+  .pkt-row .proto-udp  { color: var(--green); }
+  .pkt-row .proto-icmp { color: var(--yellow); }
+
+  /* ── IP list ── */
+  .ip-list { list-style: none; }
+  .ip-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: .45rem .2rem;
+    border-bottom: 1px solid rgba(30,58,95,.3);
+    font-size: .82rem;
+  }
+  .ip-list li:last-child { border-bottom: none; }
+  .ip-addr { font-family: var(--mono); }
+  .ip-bar {
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    margin-top: 2px;
+  }
+
+  /* ── Notification toast ── */
+  #toasts {
+    position: fixed;
+    bottom: 1.5rem; right: 1.5rem;
+    display: flex; flex-direction: column; gap: .5rem;
+    z-index: 999;
+  }
+  .toast {
+    padding: .75rem 1rem;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-size: .82rem;
+    max-width: 340px;
+    animation: slideIn .2s ease;
+    border-left: 3px solid var(--accent);
+  }
+  .toast.CRITICAL { border-left-color: var(--red); }
+  .toast.HIGH     { border-left-color: var(--orange); }
+  @keyframes slideIn { from { transform: translateX(20px); opacity:0; } to { transform: translateX(0); opacity:1; } }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+  .tab {
+    padding: .6rem 1rem;
+    font-size: .8rem;
+    cursor: pointer;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    transition: all .15s;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── Sparkline ── */
+  .spark { height: 32px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+    IDS Platform
+  </div>
+  <div class="status-badge">
+    <div class="pulse"></div>
+    <span id="status-text">MONITORING ACTIVE</span>
+  </div>
+  <div class="header-actions">
+    <span style="font-family:var(--mono);font-size:.72rem;color:var(--muted)" id="clock"></span>
+    <button class="btn" onclick="trainModel()">Train ML Model</button>
+    <a href="/api/report" class="btn btn-primary">📄 Export PDF</a>
+  </div>
+</header>
+
+<main>
+
+  <!-- Stat Cards -->
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-label">Packets Analysed</div>
+      <div class="stat-value" id="pkt-count">0</div>
+      <div class="stat-sub" id="pkt-pps">— pps</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-label">Total Alerts</div>
+      <div class="stat-value" id="alert-count">0</div>
+      <div class="stat-sub" id="alert-sub">No active threats</div>
+    </div>
+    <div class="stat-card orange">
+      <div class="stat-label">Port Scans</div>
+      <div class="stat-value" id="scan-count">0</div>
+      <div class="stat-sub">Detected events</div>
+    </div>
+    <div class="stat-card purple">
+      <div class="stat-label">Brute Force</div>
+      <div class="stat-value" id="brute-count">0</div>
+      <div class="stat-sub">Auth attacks</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-label">DDoS Events</div>
+      <div class="stat-value" id="ddos-count">0</div>
+      <div class="stat-sub">Flood attacks</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Uptime</div>
+      <div class="stat-value" id="uptime">0s</div>
+      <div class="stat-sub">Sensor active</div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="content-grid">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Traffic & Alerts Timeline</span>
+        <select id="timeline-range" class="btn" style="padding:4px 8px" onchange="loadTimeline()">
+          <option value="30">Last 30 min</option>
+          <option value="60" selected>Last 60 min</option>
+          <option value="120">Last 2 h</option>
+        </select>
+      </div>
+      <div class="panel-body">
+        <div class="chart-wrap"><canvas id="timelineChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Protocol Distribution</span></div>
+      <div class="panel-body">
+        <div class="chart-wrap"><canvas id="protoChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerts + Top IPs -->
+  <div class="content-grid three">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Recent Alerts</span>
+        <div style="display:flex;gap:6px">
+          <button class="btn" style="font-size:.72rem;padding:3px 8px" onclick="filterAlerts('')">All</button>
+          <button class="btn" style="font-size:.72rem;padding:3px 8px" onclick="filterAlerts('PORT_SCAN')">Scan</button>
+          <button class="btn" style="font-size:.72rem;padding:3px 8px" onclick="filterAlerts('BRUTEFORCE')">BF</button>
+          <button class="btn" style="font-size:.72rem;padding:3px 8px" onclick="filterAlerts('DDOS')">DDoS</button>
+        </div>
+      </div>
+      <div class="panel-body" style="padding:0">
+        <div style="overflow-x:auto;max-height:300px;overflow-y:auto">
+          <table class="alert-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Type</th>
+                <th>Severity</th>
+                <th>Source IP</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody id="alert-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Top Source IPs</span></div>
+      <div class="panel-body" style="padding:.8rem 1rem">
+        <ul class="ip-list" id="top-ips"></ul>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Attack Distribution</span></div>
+      <div class="panel-body">
+        <div class="chart-wrap"><canvas id="attackChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live packet feed -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">Live Packet Feed</span>
+      <span style="font-family:var(--mono);font-size:.72rem;color:var(--muted)">Real-time capture</span>
+    </div>
+    <div class="panel-body" style="padding:.5rem">
+      <div style="display:grid;grid-template-columns:6rem 8rem 8rem 3rem 3rem;gap:.5rem;padding:.3rem .5rem;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">
+        <span>Time</span><span>Src IP</span><span>Dst IP</span><span>Proto</span><span>Len</span>
+      </div>
+      <div class="packet-feed" id="pkt-feed"></div>
+    </div>
+  </div>
+
+</main>
+
+<div id="toasts"></div>
+
+<script>
+// ── Socket.IO ─────────────────────────────────────────────────────────────────
+const socket = io();
+socket.on('live_stats', d => updateStats(d));
+socket.on('new_packet', p => addPacketRow(p));
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+function tick() {
+  document.getElementById('clock').textContent = new Date().toUTCString().slice(0,25);
+}
+tick(); setInterval(tick, 1000);
+
+// ── Charts ────────────────────────────────────────────────────────────────────
+const CHART_DEFAULTS = {
+  color: '#E2E8F0',
+  borderColor: '#1E3A5F',
+  backgroundColor: 'transparent',
+};
+Chart.defaults.color = '#64748B';
+Chart.defaults.borderColor = '#1E3A5F';
+
+const timelineChart = new Chart(document.getElementById('timelineChart'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      {
+        label: 'Packets',
+        data: [],
+        borderColor: '#3B82F6',
+        backgroundColor: 'rgba(59,130,246,.08)',
+        fill: true,
+        tension: .4,
+        pointRadius: 0,
+      },
+      {
+        label: 'Alerts',
+        data: [],
+        borderColor: '#EF4444',
+        backgroundColor: 'rgba(239,68,68,.08)',
+        fill: true,
+        tension: .4,
+        pointRadius: 0,
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } } },
+    scales: {
+      x: { grid: { color: '#1E3A5F' }, ticks: { maxTicksLimit: 8, font: { size: 10 } } },
+      y: { grid: { color: '#1E3A5F' }, ticks: { font: { size: 10 } }, beginAtZero: true },
+    }
+  }
+});
+
+const protoChart = new Chart(document.getElementById('protoChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['TCP', 'UDP', 'ICMP', 'Other'],
+    datasets: [{ data: [0,0,0,0], backgroundColor: ['#3B82F6','#22C55E','#EAB308','#64748B'], borderWidth: 0 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { position: 'right', labels: { font: { size: 11 } } } },
+    cutout: '65%'
+  }
+});
+
+const attackChart = new Chart(document.getElementById('attackChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Port Scan','Brute Force','DDoS','ML Anomaly'],
+    datasets: [{
+      data: [0,0,0,0],
+      backgroundColor: ['rgba(249,115,22,.7)','rgba(239,68,68,.7)','rgba(99,102,241,.7)','rgba(234,179,8,.7)'],
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+      y: { grid: { color: '#1E3A5F' }, ticks: { font: { size: 10 } }, beginAtZero: true }
+    }
+  }
+});
+
+// ── Data loaders ──────────────────────────────────────────────────────────────
+async function loadTimeline() {
+  const m = document.getElementById('timeline-range').value;
+  const r = await fetch(`/api/traffic/timeline?minutes=${m}`);
+  const d = await r.json();
+
+  const trafficMap = Object.fromEntries(d.traffic.map(x => [x.time, x.count]));
+  const alertMap   = Object.fromEntries(d.alerts.map(x => [x.time, x.count]));
+  const labels     = [...new Set([...d.traffic.map(x=>x.time), ...d.alerts.map(x=>x.time)])].sort();
+
+  timelineChart.data.labels = labels.map(l => l.slice(11,16));
+  timelineChart.data.datasets[0].data = labels.map(l => trafficMap[l] || 0);
+  timelineChart.data.datasets[1].data = labels.map(l => alertMap[l]   || 0);
+  timelineChart.update('none');
+}
+
+async function loadStats() {
+  const r = await fetch('/api/stats');
+  const d = await r.json();
+
+  document.getElementById('pkt-count').textContent = d.packet_count.toLocaleString();
+  document.getElementById('pkt-pps').textContent = (d.capture.pps || '—') + ' pps';
+
+  const proto = d.protocol_distribution;
+  protoChart.data.datasets[0].data = [proto.TCP||0, proto.UDP||0, proto.ICMP||0, proto.OTHER||0];
+  protoChart.update('none');
+
+  const ul = document.getElementById('top-ips');
+  const maxCount = d.top_src_ips[0]?.count || 1;
+  ul.innerHTML = d.top_src_ips.map(ip => `
+    <li>
+      <div>
+        <div class="ip-addr">${ip.ip}</div>
+        <div class="ip-bar" style="width:${Math.round(ip.count/maxCount*100)}%"></div>
+      </div>
+      <span style="font-family:var(--mono);font-size:.78rem;color:var(--muted)">${ip.count.toLocaleString()}</span>
+    </li>
+  `).join('');
+}
+
+async function loadAlerts(type='') {
+  const url = '/api/alerts?limit=30' + (type ? `&type=${type}` : '');
+  const r = await fetch(url);
+  const alerts = await r.json();
+
+  let scan=0, brute=0, ddos=0, ml=0;
+  alerts.forEach(a => {
+    if(a.alert_type==='PORT_SCAN')  scan++;
+    if(a.alert_type==='BRUTEFORCE') brute++;
+    if(a.alert_type==='DDOS')       ddos++;
+    if(a.alert_type?.startsWith('ML_')) ml++;
+  });
+
+  document.getElementById('scan-count').textContent  = scan;
+  document.getElementById('brute-count').textContent = brute;
+  document.getElementById('ddos-count').textContent  = ddos;
+  attackChart.data.datasets[0].data = [scan, brute, ddos, ml];
+  attackChart.update('none');
+
+  const tbody = document.getElementById('alert-tbody');
+  tbody.innerHTML = alerts.map(a => `
+    <tr>
+      <td>${a.timestamp.slice(11,19)}</td>
+      <td><span class="type-badge">${a.alert_type}</span></td>
+      <td><span class="badge ${a.severity}">${a.severity}</span></td>
+      <td>${a.src_ip}</td>
+      <td style="color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.description}</td>
+    </tr>
+  `).join('');
+}
+
+function filterAlerts(type) { loadAlerts(type); }
+
+// ── Live stats from socket ─────────────────────────────────────────────────────
+function updateStats(d) {
+  document.getElementById('pkt-count').textContent  = (d.packet_count||0).toLocaleString();
+  document.getElementById('alert-count').textContent = (d.alert_count||0).toLocaleString();
+  document.getElementById('alert-sub').textContent   = d.alert_count > 0 ? `${d.alert_count} total` : 'No alerts';
+
+  if(d.capture?.uptime_seconds !== undefined) {
+    const s = d.capture.uptime_seconds;
+    const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), ss = s%60;
+    document.getElementById('uptime').textContent = h>0 ? `${h}h${m}m` : m>0 ? `${m}m${ss}s` : `${ss}s`;
+    document.getElementById('pkt-pps').textContent = (d.capture.pps||0) + ' pps';
+  }
+
+  if(d.recent_alerts?.length) {
+    const a = d.recent_alerts[0];
+    if(a.severity === 'CRITICAL' || a.severity === 'HIGH') {
+      showToast(a);
+    }
+  }
+}
+
+// ── Packet feed ───────────────────────────────────────────────────────────────
+const feed = document.getElementById('pkt-feed');
+let pktCount = 0;
+
+function addPacketRow(p) {
+  pktCount++;
+  if(pktCount % 3 !== 0) return; // throttle display
+  const protoClass = 'proto-' + p.protocol?.toLowerCase();
+  const row = document.createElement('div');
+  row.className = 'pkt-row';
+  row.innerHTML = `
+    <span>${p.timestamp?.slice(11,19)||''}</span>
+    <span>${p.src_ip}</span>
+    <span>${p.dst_ip}</span>
+    <span class="${protoClass}">${p.protocol}</span>
+    <span>${p.length}</span>
+  `;
+  feed.insertBefore(row, feed.firstChild);
+  while(feed.children.length > 80) feed.removeChild(feed.lastChild);
+}
+
+// ── Toast notifications ───────────────────────────────────────────────────────
+const shownAlerts = new Set();
+function showToast(alert) {
+  if(shownAlerts.has(alert.id)) return;
+  shownAlerts.add(alert.id);
+  const el = document.createElement('div');
+  el.className = `toast ${alert.severity}`;
+  el.innerHTML = `<strong>${alert.alert_type}</strong> — ${alert.src_ip}<br><small>${alert.description}</small>`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 5000);
+}
+
+// ── ML Training ───────────────────────────────────────────────────────────────
+async function trainModel() {
+  const btn = event.target;
+  btn.textContent = 'Training…'; btn.disabled = true;
+  try {
+    const r = await fetch('/api/ml/train', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({samples:5000}) });
+    const d = await r.json();
+    alert(`Model trained!\nAccuracy: ${(d.accuracy*100).toFixed(1)}%`);
+  } catch(e) {
+    alert('Training failed — check server logs');
+  }
+  btn.textContent = 'Train ML Model'; btn.disabled = false;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadStats();
+loadAlerts();
+loadTimeline();
+setInterval(loadStats, 5000);
+setInterval(loadAlerts, 8000);
+setInterval(loadTimeline, 30000);
+</script>
+</body>
+</html>
