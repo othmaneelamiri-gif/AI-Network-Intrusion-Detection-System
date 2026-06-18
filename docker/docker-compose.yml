@@ -1,0 +1,44 @@
+version: "3.9"
+
+services:
+  ids:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: ids-platform
+    restart: unless-stopped
+    # Required for raw packet capture
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    network_mode: host
+    volumes:
+      - ids-data:/app/data
+    environment:
+      - IDS_SECRET=change-me-in-production
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: ids-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - ids
+    profiles:
+      - production
+
+volumes:
+  ids-data:
+    driver: local
