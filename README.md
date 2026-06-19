@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 🛡️ IDS Platform — AI-Powered Intrusion Detection System
 
 > Detect. Alert. Protect.  
@@ -174,3 +175,7 @@ tests/test_ids.py::TestMLModel::test_train_and_predict        PASSED
 - [ ] Suricata rule integration
 - [ ] Multi-sensor distributed mode
 - [ ] CVE correlation database
+=======
+# AI-Network-Intrusion-Detection-System
+AI-powered Network Intrusion Detection System using Python, Scapy, Flask and Machine Learning.
+>>>>>>> 45dd6c8e18bea7c2558c83f1708ac20420b67723
